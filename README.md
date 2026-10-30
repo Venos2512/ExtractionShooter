@@ -10,6 +10,12 @@ Mở `project.godot` trong Godot rồi nhấn F5, hoặc:
 "D:\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64.exe" --path D:\ExtractShooter
 ```
 
+Sau khi clone, thư mục `.godot/` chưa có nên game báo lỗi `Could not find type`. Mở project trong editor một lần, hoặc chạy lệnh này một lần bằng bản `_console.exe`:
+
+```
+--path . --headless --import
+```
+
 | Thao tác | Bàn phím | Chuột hoặc cảm ứng |
 | --- | --- | --- |
 | Di chuyển | WASD hoặc phím mũi tên | Kéo ở phần dưới màn hình |
