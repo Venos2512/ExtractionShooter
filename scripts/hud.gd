@@ -3,17 +3,39 @@ extends CanvasLayer
 ## On-screen readouts, the floating joystick, the dash button, and modal screens.
 ## Built in code so the whole prototype stays in a few readable scripts.
 
-const SCREEN := Vector2(720.0, 1280.0)
+## Layout units. They fill the 886 x 1920 screen once scaled by UI_SCALE.
+const SCREEN := Vector2(720.0, 1560.0)
+const UI_SCALE := 886.0 / 720.0
+## Clears the safe area at the top of the screen.
+const TOP_MARGIN := 56.0
+## Moves the centered screens down to the middle of the taller layout.
+const MODAL_SHIFT := 140.0
 const JOY_RADIUS := 90.0
-const DASH_CENTER := Vector2(630.0, 1120.0)
+const DASH_CENTER := Vector2(630.0, 1400.0)
 const DASH_RADIUS := 62.0
 const PANEL := Color(0.09, 0.10, 0.08, 0.94)
 const INK := Color(0.93, 0.92, 0.82)
 const ACCENT := Color(0.84, 0.70, 0.26)
+## Story lines with the intro time at which each one appears, in seconds.
+const INTRO_LINES := [
+	[0.2, "Một viên thiên thạch lao xuống Trái Đất."],
+	[3.0, "Trong lõi đá là trứng của một loài bọ ngoài hành tinh."],
+	[5.0, "Chỉ vài tuần, bầy bọ đã nuốt chửng các thành phố."],
+	[7.0, "Bạn là lính thu hồi: băng qua khu đổ nát, gom mẫu vật, rồi tới bãi đáp."],
+]
+const INTRO_HINT_AT := 3.0
 
 var game: Game
+var play_root: Control
+var intro_root: Control
+var intro_label: Label
+var intro_hint: Label
+var flash_rect: ColorRect
 var hp_bar: ProgressBar
 var xp_bar: ProgressBar
+var route_bar: ProgressBar
+var route_label: Label
+var hint_label: Label
 var boss_bar: ProgressBar
 var boss_label: Label
 var danger_label: Label
@@ -61,10 +83,15 @@ class TouchView:
 
 func setup(g: Game) -> void:
 	game = g
+	transform = Transform2D().scaled(Vector2.ONE * UI_SCALE)
 	_build()
 	hide_cards()
 	hide_revive()
 	result_root.visible = false
+	var old_game: Array[Control] = [xp_bar, danger_label, timer_label, bag_label, cash_label, route_bar, route_label, wave_label, status_label, boss_bar, boss_label]
+	for c in old_game:
+		c.visible = not g.sample_mode
+	hint_label.visible = g.sample_mode
 
 
 func _build() -> void:
@@ -75,28 +102,34 @@ func _build() -> void:
 	add_child(tint)
 	var root := Control.new()
 	root.size = SCREEN
+	root.position.y = TOP_MARGIN
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	play_root = root
 	hp_bar = _bar(root, Vector2(24, 26), Vector2(360, 26), Color(0.82, 0.2, 0.16))
 	xp_bar = _bar(root, Vector2(24, 58), Vector2(360, 10), Color(0.4, 0.75, 1.0))
 	danger_label = _label(root, Vector2(404, 18), 34, ACCENT)
 	timer_label = _label(root, Vector2(600, 18), 34, INK)
 	bag_label = _label(root, Vector2(24, 78), 26, INK)
 	cash_label = _label(root, Vector2(244, 78), 26, Color(1.0, 0.84, 0.3))
-	wave_label = _label(root, Vector2(0, 124), 36, Color(1.0, 0.4, 0.3))
+	route_bar = _bar(root, Vector2(24, 118), Vector2(600, 12), Color(0.4, 0.95, 0.55))
+	route_label = _label(root, Vector2(634, 106), 24, Color(0.4, 0.95, 0.55))
+	route_label.text = "ĐÍCH"
+	wave_label = _label(root, Vector2(0, 134), 36, Color(1.0, 0.4, 0.3))
 	wave_label.size = Vector2(SCREEN.x, 50)
 	wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status_label = _label(root, Vector2(0, 172), 28, Color(0.5, 0.9, 1.0))
+	status_label = _label(root, Vector2(0, 182), 28, Color(0.5, 0.9, 1.0))
 	status_label.size = Vector2(SCREEN.x, 44)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast_label = _label(root, Vector2(0, 222), 32, INK)
+	toast_label = _label(root, Vector2(0, 232), 32, INK)
 	toast_label.size = Vector2(SCREEN.x, 44)
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	boss_label = _label(root, Vector2(0, 1178), 24, Color(1.0, 0.5, 0.4))
+	boss_label = _label(root, Vector2(0, 1400), 24, Color(1.0, 0.5, 0.4))
 	boss_label.size = Vector2(SCREEN.x, 34)
 	boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	boss_label.text = "BOSS: BẢO VỆ KHỔNG LỒ"
-	boss_bar = _bar(root, Vector2(60, 1214), Vector2(600, 22), Color(0.9, 0.2, 0.15))
+	boss_label.text = "BOSS: BỌ HÚC"
+	boss_bar = _bar(root, Vector2(60, 1436), Vector2(600, 22), Color(0.9, 0.2, 0.15))
+	hint_label = _label(root, Vector2(24, 62), 26, INK)
 	touch_view = TouchView.new()
 	touch_view.hud = self
 	touch_view.size = SCREEN
@@ -105,6 +138,51 @@ func _build() -> void:
 	_build_cards()
 	_build_revive()
 	_build_result()
+	for modal: Control in [card_root, revive_root, result_root]:
+		for child in modal.get_children():
+			(child as Control).position.y += MODAL_SHIFT
+	_build_intro()
+	flash_rect = ColorRect.new()
+	flash_rect.size = SCREEN
+	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash_rect.color = Color(1.0, 0.93, 0.8, 0.0)
+	add_child(flash_rect)
+
+
+func _build_intro() -> void:
+	intro_root = Control.new()
+	intro_root.size = SCREEN
+	intro_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(intro_root)
+	intro_label = _label(intro_root, Vector2(50, 150), 34, INK)
+	intro_label.size = Vector2(SCREEN.x - 100.0, 420)
+	intro_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	intro_hint = _label(intro_root, Vector2(0, 1400), 30, ACCENT)
+	intro_hint.size = Vector2(SCREEN.x, 50)
+	intro_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intro_hint.text = "Chạm để bắt đầu"
+	intro_root.visible = false
+
+
+func show_intro() -> void:
+	intro_root.visible = true
+	play_root.visible = false
+	touch_view.visible = false
+
+
+func hide_intro() -> void:
+	intro_root.visible = false
+	play_root.visible = true
+	touch_view.visible = true
+
+
+func _refresh_intro() -> void:
+	var shown: Array[String] = []
+	for line: Array in INTRO_LINES:
+		if game.intro_t >= float(line[0]):
+			shown.append(String(line[1]))
+	intro_label.text = "\n\n".join(shown)
+	intro_hint.visible = game.intro_t >= INTRO_HINT_AT and int(game.intro_t * 2.0) % 2 == 0
 
 
 func _label(parent: Control, pos: Vector2, font_size: int, color: Color) -> Label:
@@ -121,9 +199,10 @@ func _label(parent: Control, pos: Vector2, font_size: int, color: Color) -> Labe
 
 func _bar(parent: Control, pos: Vector2, size: Vector2, color: Color) -> ProgressBar:
 	var b := ProgressBar.new()
+	# Percentage text raises the minimum height, so turn it off before sizing.
+	b.show_percentage = false
 	b.position = pos
 	b.size = size
-	b.show_percentage = false
 	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = Color(0, 0, 0, 0.6)
@@ -217,18 +296,36 @@ func _build_result() -> void:
 
 
 func refresh() -> void:
+	flash_rect.color.a = clampf(game.impact_flash, 0.0, 1.0)
+	if game.state == Game.State.INTRO:
+		_refresh_intro()
+		return
 	var p := game.player
 	hp_bar.max_value = p.max_hp
 	hp_bar.value = p.hp
+	if game.sample_mode:
+		hint_label.text = game.sample_level.status() if game.sample_level != null else "Hạ: %d" % game.kills
+		tint.color.a = 0.18 + 0.08 * sin(Time.get_ticks_msec() * 0.012) if p.hp < p.max_hp * 0.3 else 0.0
+		toast_label.text = game.toast if game.toast_t > 0.0 else ""
+		var sample_boss := game.horde.boss
+		boss_bar.visible = sample_boss != null
+		boss_label.visible = sample_boss != null
+		if sample_boss != null:
+			boss_bar.max_value = sample_boss.max_hp
+			boss_bar.value = sample_boss.hp
+		touch_view.queue_redraw()
+		return
 	xp_bar.max_value = game.xp_next
 	xp_bar.value = game.xp
 	danger_label.text = "DANGER %d" % game.danger
 	timer_label.text = "%d:%02d" % [int(game.run_t) / 60, int(game.run_t) % 60]
 	bag_label.text = "Ba lô %d/%d" % [game.backpack_used(), game.t.backpack_slots]
 	cash_label.text = "Tiền %d" % game.cash
+	route_bar.max_value = game.level.goal_room.x0
+	route_bar.value = maxf(route_bar.value, p.x)
 	var warn := game.next_wave_t <= game.t.wave_warning
 	wave_label.visible = warn and game.rescue != Game.Rescue.LANDED
-	wave_label.text = "Đợt zombie sau %d giây" % int(ceil(game.next_wave_t))
+	wave_label.text = "Đợt bọ sau %d giây" % int(ceil(game.next_wave_t))
 	status_label.text = _status_text()
 	toast_label.text = game.toast if game.toast_t > 0.0 else ""
 	var boss := game.horde.boss
@@ -251,14 +348,12 @@ func _status_text() -> String:
 		Game.Rescue.CALLING:
 			return "Cứu hộ tới sau %d giây" % int(ceil(game.rescue_left))
 		Game.Rescue.LANDED:
-			return "Trực thăng đã đến! Vào vòng tròn"
+			return "Trực thăng đã đến! Vào vùng đón"
 	if game.exit_hold > 0.0:
 		return "Đang thoát... %d giây" % int(ceil(game.t.early_exit_hold - game.exit_hold))
-	if game.run_t < game.t.early_exit_opens_at:
-		return "Hầm thoát mở sau %d giây" % int(ceil(game.t.early_exit_opens_at - game.run_t))
-	if game.run_t < game.t.rescue_opens_at:
-		return "Hầm thoát đã mở. Cứu hộ mở sau %d giây" % int(ceil(game.t.rescue_opens_at - game.run_t))
-	return "Thoát sớm qua hầm, hay lên mái gọi cứu hộ?"
+	if game.level.room_at(game.player.f, game.player.x) == game.level.goal_room:
+		return "Chui hầm thoát ngay, hay gọi cứu hộ lấy thưởng?"
+	return ""
 
 
 func show_cards() -> void:
@@ -289,7 +384,8 @@ func hide_revive() -> void:
 
 
 func show_result(survived: bool, body: String) -> void:
-	result_title.text = "THOÁT THÀNH CÔNG" if survived else "NHIỆM VỤ THẤT BẠI"
+	var won := "HOÀN THÀNH MÀN" if game.sample_mode else "THOÁT THÀNH CÔNG"
+	result_title.text = won if survived else "NHIỆM VỤ THẤT BẠI"
 	result_title.add_theme_color_override("font_color", ACCENT if survived else Color(1.0, 0.4, 0.3))
 	result_body.text = body
 	result_root.visible = true
@@ -303,20 +399,28 @@ func joy_vector() -> Vector2:
 
 
 func _input(event: InputEvent) -> void:
-	if game == null or game.state != Game.State.PLAY:
+	if game == null:
+		return
+	if game.state == Game.State.INTRO:
+		var tapped: bool = (event is InputEventScreenTouch or event is InputEventKey) and event.is_pressed()
+		if tapped and game.intro_t >= INTRO_HINT_AT:
+			game.begin_run()
+		return
+	if game.state != Game.State.PLAY:
 		return
 	if event is InputEventScreenTouch:
+		var at: Vector2 = event.position / UI_SCALE
 		if event.pressed:
-			if event.position.distance_to(DASH_CENTER) < DASH_RADIUS:
+			if at.distance_to(DASH_CENTER) < DASH_RADIUS:
 				game.dash_requested = true
-			elif joy_index < 0 and event.position.y > SCREEN.y * 0.3:
+			elif joy_index < 0 and at.y > SCREEN.y * 0.3:
 				joy_index = event.index
-				joy_origin = event.position
-				joy_pos = event.position
+				joy_origin = at
+				joy_pos = at
 		elif event.index == joy_index:
 			joy_index = -1
 	elif event is InputEventScreenDrag and event.index == joy_index:
-		joy_pos = event.position
+		joy_pos = event.position / UI_SCALE
 		var delta: Vector2 = joy_pos - joy_origin
 		# The base follows the thumb so direction changes stay quick.
 		if delta.length() > JOY_RADIUS:

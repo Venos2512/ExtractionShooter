@@ -6,11 +6,9 @@ var game: Game
 var t: Tuning
 
 var x := 0.0
-var z := 0.0
 var f := 0
 var h := 0.0
 var vx := 0.0
-var vz := 0.0
 var facing := 1.0
 var anim := 0.0
 var flash := 0.0
@@ -21,17 +19,17 @@ var god_mode := false
 
 var dash_t := 0.0
 var dash_cd := 0.0
-var dash_dir := Vector2.RIGHT
+var dash_dir := 1.0
+## The way it last walked, which is where a dash goes with no direction held.
+var heading := 1.0
 
 var climb_dir := 0
 var climb_u := 0.0
 var climb_low := 0
-var climb_x := 0.0
-var climb_z := 0.0
 var climb_lock := 0.0
 
-var fire_rate := 6.0
-var damage := 10.0
+var fire_rate := 3.0
+var damage := 20.0
 var crit := 0.05
 var pierce := 0
 var bounces := 0
@@ -41,7 +39,7 @@ var lasers := 0
 var chain_chance := 0.0
 var blast_radius := 90.0
 var pickup_radius := 70.0
-var dash_cooldown := 6.0
+var dash_cooldown := 4.0
 
 
 func _init(g: Game) -> void:
@@ -66,48 +64,52 @@ func update(dt: float, input: Vector2, wants_dash: bool) -> void:
 		dash_cd = dash_cooldown
 		dash_t = t.dash_time
 		iframes = maxf(iframes, t.dash_iframes)
-		dash_dir = input.normalized() if input.length() > 0.2 else Vector2(facing, 0.0)
+		dash_dir = signf(input.x) if absf(input.x) > 0.2 else heading
 		game.sfx.play("dash")
-		game.fx.spray(x, 10.0, z, f, 6, Color(0.8, 0.8, 0.7, 0.8), 120.0, 3.0, 400.0)
+		game.fx.spray(x, 10.0, f, 6, Color(0.8, 0.8, 0.7, 0.8), 120.0, 3.0, 400.0)
 	var accel := t.move_speed / maxf(t.accel_time, 0.001)
 	if dash_t > 0.0:
 		dash_t -= dt
-		vx = dash_dir.x * t.dash_speed
-		vz = -dash_dir.y * t.dash_speed * t.depth_speed_ratio
+		vx = dash_dir * t.dash_speed
 	else:
 		vx = move_toward(vx, input.x * t.move_speed, accel * dt)
-		vz = move_toward(vz, -input.y * t.move_speed * t.depth_speed_ratio, accel * dt)
 	if absf(input.x) > 0.1:
-		facing = signf(input.x)
-	var new_x := game.level.resolve_x(f, x, x + vx * dt, z)
-	x = new_x
-	z = game.level.resolve_z(f, x, z + vz * dt)
-	var speed := Vector2(vx, vz).length()
-	anim += speed * dt * 0.05
+		heading = signf(input.x)
+	# It keeps facing what it shoots at, whichever way it walks.
+	var aim := game.weapons.target
+	facing = signf(aim.x - x) if aim != null and not aim.dead and absf(aim.x - x) > 4.0 else heading
+	x = game.level.resolve_x(f, x, x + vx * dt)
+	anim += absf(vx) * dt * 0.05
+	if game.arena != null:
+		h = game.arena.ground_at(x)
 	if climb_lock <= 0.0:
 		_try_ladders(input)
 
 
-func _try_ladders(input: Vector2) -> void:
-	var up := game.level.ladder_up(f)
-	if up != null and input.y < -0.5 and absf(x - up.x) < 30.0 and z > up.z - 28.0:
-		_start_climb(up, 1)
-		return
-	var down := game.level.ladder_down(f)
-	if down != null and input.y > 0.6 and absf(input.x) < 0.5 and absf(x - down.x) < 30.0 and z > down.z - 28.0:
-		_start_climb(down, -1)
+func can_shoot() -> bool:
+	return climb_dir == 0
+
+
+func _try_ladders(input: Vector2) -> bool:
+	if input.y < -0.5:
+		var up := game.level.ladder_up_near(f, x, 30.0)
+		if up != null:
+			_start_climb(up, 1)
+			return true
+	elif input.y > 0.6 and absf(input.x) < 0.5:
+		var down := game.level.ladder_down_near(f, x, 30.0)
+		if down != null:
+			_start_climb(down, -1)
+			return true
+	return false
 
 
 func _start_climb(l: Level.Ladder, dir: int) -> void:
 	climb_dir = dir
 	climb_low = l.low_f
 	climb_u = 0.0 if dir > 0 else 1.0
-	climb_x = l.x
-	climb_z = l.z
 	vx = 0.0
-	vz = 0.0
 	x = l.x
-	z = l.z
 
 
 func _update_climb(dt: float) -> void:
@@ -116,7 +118,7 @@ func _update_climb(dt: float) -> void:
 	var done := climb_u >= 1.0 or climb_u <= 0.0
 	climb_u = clampf(climb_u, 0.0, 1.0)
 	var pose := game.climb_pose(climb_low, climb_u)
-	f = pose.x
+	f = int(pose.x)
 	h = pose.y
 	if done:
 		climb_dir = 0
@@ -135,9 +137,9 @@ func hurt(amount: float, from_x: float) -> void:
 	iframes = 0.25
 	flash = 0.12
 	vx += signf(x - from_x) * 120.0
-	game.fx.number(x, 90.0, z, f, str(int(amount)), Color(1.0, 0.35, 0.3), 26)
+	game.fx.number(x, h + 90.0, f, str(int(amount)), Color(1.0, 0.35, 0.3), 26)
 	game.fx.add_trauma(0.35)
-	game.fx.spray(x, 40.0, z, f, 5, Color(0.8, 0.12, 0.1), 150.0)
+	game.fx.spray(x, h + 40.0, f, 5, Color(0.8, 0.12, 0.1), 150.0)
 	game.sfx.play("hurt")
 	if hp <= 0.0:
 		hp = 0.0

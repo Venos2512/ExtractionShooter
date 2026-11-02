@@ -12,13 +12,13 @@ const ALL := [
 	{"id": "hp", "title": "Giáp vá", "desc": "Máu tối đa +30, hồi 30 máu", "rarity": Rarity.COMMON, "max": 5},
 	{"id": "dash", "title": "Giày nhẹ", "desc": "Hồi lướt nhanh hơn 30%", "rarity": Rarity.COMMON, "max": 3},
 	{"id": "magnet", "title": "Nam châm", "desc": "Bán kính hút đồ +60%", "rarity": Rarity.COMMON, "max": 3},
-	{"id": "pierce", "title": "Đạn xuyên", "desc": "Đạn xuyên thêm 1 zombie", "rarity": Rarity.RARE, "max": 3},
+	{"id": "pierce", "title": "Đạn xuyên", "desc": "Đạn xuyên thêm 1 con bọ", "rarity": Rarity.RARE, "max": 3},
 	{"id": "grenade", "title": "Lựu đạn", "desc": "Tự ném lựu đạn, thêm 1 quả mỗi thẻ", "rarity": Rarity.RARE, "max": 3},
 	{"id": "radius", "title": "Thuốc nổ", "desc": "Bán kính nổ +30%", "rarity": Rarity.RARE, "max": 3},
 	{"id": "drone", "title": "Drone", "desc": "Thêm 1 drone tự bắn", "rarity": Rarity.RARE, "max": 3},
 	{"id": "laser", "title": "Laser xoay", "desc": "Tia laser xoay quanh bạn", "rarity": Rarity.LEGENDARY, "max": 3},
-	{"id": "bounce", "title": "Đạn nảy", "desc": "Đạn nảy sang zombie gần nhất", "rarity": Rarity.LEGENDARY, "max": 2},
-	{"id": "chain", "title": "Nổ dây chuyền", "desc": "Zombie chết có 20% phát nổ", "rarity": Rarity.LEGENDARY, "max": 2},
+	{"id": "bounce", "title": "Đạn nảy", "desc": "Đạn nảy sang con bọ gần nhất", "rarity": Rarity.LEGENDARY, "max": 2},
+	{"id": "chain", "title": "Nổ dây chuyền", "desc": "Bọ chết có 20% phát nổ", "rarity": Rarity.LEGENDARY, "max": 2},
 ]
 const WEIGHTS := {Rarity.COMMON: 10.0, Rarity.RARE: 4.0, Rarity.LEGENDARY: 1.5}
 const COLORS := {

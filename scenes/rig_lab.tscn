@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bqfebkicgrsef"]
+
+[ext_resource type="Script" uid="uid://dlfucgmcos4qc" path="res://scripts/rig_lab.gd" id="1"]
+
+[node name="RigLab" type="Node2D" unique_id=1742513398]
+script = ExtResource("1")
